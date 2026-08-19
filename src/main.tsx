@@ -34,15 +34,272 @@ const bits = (n: number, m: number) =>
     .slice(0, n)
     .map((_, i) => ((m >> (n - 1 - i)) & 1) as 0 | 1);
 
+
+type KMapMap = {
+  label: string;
+  rowVars: string[];
+  colVars: string[];
+  rowCodes: string[];
+  colCodes: string[];
+  cellMinterm: (row: number, col: number) => number;
+};
+
+const grayCodes = (bits: number): string[] =>
+  Array.from({ length: 2 ** bits }, (_, i) =>
+    (i ^ (i >> 1)).toString(2).padStart(bits, '0')
+  );
+
+const bitsToNumber = (bits: string): number =>
+  parseInt(bits || '0', 2);
+
+function buildKMaps(n: number): KMapMap[] {
+  if (n === 2) {
+    const rowCodes = grayCodes(1);
+    const colCodes = grayCodes(1);
+    return [{
+      label: 'K-map',
+      rowVars: ['A'],
+      colVars: ['B'],
+      rowCodes,
+      colCodes,
+      cellMinterm: (r, c) =>
+        bitsToNumber(rowCodes[r] + colCodes[c]),
+    }];
+  }
+
+  if (n === 3) {
+    const rowCodes = grayCodes(1);
+    const colCodes = grayCodes(2);
+    return [{
+      label: 'K-map',
+      rowVars: ['A'],
+      colVars: ['B', 'C'],
+      rowCodes,
+      colCodes,
+      cellMinterm: (r, c) =>
+        bitsToNumber(rowCodes[r] + colCodes[c]),
+    }];
+  }
+
+  if (n === 4) {
+    const rowCodes = grayCodes(2);
+    const colCodes = grayCodes(2);
+    return [{
+      label: 'K-map',
+      rowVars: ['A', 'B'],
+      colVars: ['C', 'D'],
+      rowCodes,
+      colCodes,
+      cellMinterm: (r, c) =>
+        bitsToNumber(rowCodes[r] + colCodes[c]),
+    }];
+  }
+
+  if (n === 5) {
+    const rowCodes = grayCodes(2);
+    const colCodes = grayCodes(2);
+    return ['0', '1'].map(prefix => ({
+      label: `A = ${prefix}`,
+      rowVars: ['B', 'C'],
+      colVars: ['D', 'E'],
+      rowCodes,
+      colCodes,
+      cellMinterm: (r, c) =>
+        bitsToNumber(prefix + rowCodes[r] + colCodes[c]),
+    }));
+  }
+
+  const rowCodes = grayCodes(2);
+  const colCodes = grayCodes(2);
+  return grayCodes(2).map(prefix => ({
+    label: `AB = ${prefix}`,
+    rowVars: ['C', 'D'],
+    colVars: ['E', 'F'],
+    rowCodes,
+    colCodes,
+    cellMinterm: (r, c) =>
+      bitsToNumber(prefix + rowCodes[r] + colCodes[c]),
+  }));
+}
+
+function KMapInput({
+  n,
+  values,
+  onChange,
+}: {
+  n: number;
+  values: TruthValue[];
+  onChange: (minterm: number, value: TruthValue) => void;
+}) {
+  const maps = buildKMaps(n);
+
+  const setValue = (
+    minterm: number,
+    value: string
+  ) => {
+    onChange(
+      minterm,
+      value === 'X'
+        ? 'X'
+        : (Number(value) as 0 | 1)
+    );
+  };
+
+  return (
+    <div className="mt-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-200">
+            Editable K-map
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            The <b>Variables</b> selector above controls the
+            number of variables. Set every cell to 0, 1, or X.
+            X is a don't-care condition.
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-cyan-200">
+            1 · required
+          </span>
+          <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-violet-200">
+            X · don't-care
+          </span>
+          <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-slate-400">
+            0 · zero
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {maps.map((map, mapIndex) => (
+          <div
+            key={`${map.label}-${mapIndex}`}
+            className="rounded-2xl border border-slate-800 bg-slate-950/50 p-3"
+          >
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-slate-200">
+                {map.label}
+              </div>
+              <div className="text-[11px] text-slate-500">
+                rows {map.rowVars.join('')} · cols{' '}
+                {map.colVars.join('')}
+              </div>
+            </div>
+
+            <div className="overflow-auto">
+              <table className="min-w-[520px] w-full border-collapse text-center text-xs">
+                <thead>
+                  <tr>
+                    <th className="border border-slate-800 bg-slate-900 px-2 py-2 text-slate-500">
+                      {map.rowVars.join('')}\\{map.colVars.join('')}
+                    </th>
+
+                    {map.colCodes.map(code => (
+                      <th
+                        key={code}
+                        className="border border-slate-800 bg-slate-900 px-3 py-2 font-mono text-slate-300"
+                      >
+                        {code}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {map.rowCodes.map(
+                    (rowCode, r) => (
+                      <tr key={rowCode}>
+                        <th className="border border-slate-800 bg-slate-900 px-3 py-3 font-mono text-slate-300">
+                          {rowCode}
+                        </th>
+
+                        {map.colCodes.map(
+                          (colCode, c) => {
+                            const m =
+                              map.cellMinterm(
+                                r,
+                                c
+                              );
+
+                            const value =
+                              values[m] ?? 0;
+
+                            return (
+                              <td
+                                key={colCode}
+                                className="border border-slate-800 bg-slate-950/40 px-2 py-2"
+                              >
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="text-[9px] text-slate-600">
+                                    m{m}
+                                  </span>
+
+                                  <select
+                                    value={value}
+                                    onChange={e =>
+                                      setValue(
+                                        m,
+                                        e.target.value
+                                      )
+                                    }
+                                    className={`h-10 min-w-14 rounded-lg border px-2 text-center font-bold outline-none ${
+                                      value === 1
+                                        ? 'border-cyan-400/60 bg-cyan-500/10 text-cyan-200'
+                                        : value === 'X'
+                                          ? 'border-violet-400/50 bg-violet-500/10 text-violet-200'
+                                          : 'border-slate-700 bg-slate-900 text-slate-300'
+                                    }`}
+                                  >
+                                    <option value={0}>
+                                      0
+                                    </option>
+                                    <option value={1}>
+                                      1
+                                    </option>
+                                    <option value="X">
+                                      X
+                                    </option>
+                                  </select>
+                                </div>
+                              </td>
+                            );
+                          }
+                        )}
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-xl border border-cyan-500/15 bg-cyan-500/5 p-3 text-xs text-slate-400">
+        Gray-code ordering is used so neighboring cells are
+        Boolean-adjacent. Edge cells wrap around, including
+        top-to-bottom and left-to-right edges.
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [n, setN] = useState(3);
-  const [mode, setMode] = useState<InputMode>('expression');
+  type AppInputMode = InputMode | 'kmap';
+  const [mode, setMode] = useState<AppInputMode>('expression');
   const [expr, setExpr] = useState('A XOR B XOR C');
   const [kind, setKind] = useState<TermKind>('minterm');
   const [terms, setTerms] = useState('1,2,4,7');
   const [dc, setDc] = useState('');
   const [table, setTable] = useState<TruthValue[]>(() =>
-    Array(8).fill(0)
+    Array(2 ** n).fill(0)
+  );
+
+  const [kmapTable, setKmapTable] = useState<TruthValue[]>(() =>
+    Array(2 ** n).fill(0)
   );
   const [showHow, setShowHow] = useState(false);
 
@@ -65,6 +322,13 @@ function App() {
     if (mode === 'expression' && 'evaluate' in parsed) {
       const rows = truthTable(n, parsed.evaluate);
       return expressionFromTable(n, rows);
+    }
+
+    if (mode === 'kmap') {
+      return expressionFromTable(
+        n,
+        kmapTable
+      );
     }
 
     if (mode === 'terms') {
@@ -111,6 +375,7 @@ function App() {
     dc,
     kind,
     table,
+    kmapTable,
   ]);
 
   const sop = minimizeSOP(
@@ -125,13 +390,6 @@ function App() {
     n
   );
 
-  /*
-   * Preserve constant minimization results.
-   *
-   * expressionForSOP([]) would otherwise return "0",
-   * even when minimizeSOP() correctly determined that
-   * the function is the constant 1.
-   */
   const sopExpr =
     sop.implicants.length === 0
       ? String(sop.constant)
@@ -140,9 +398,6 @@ function App() {
           n
         );
 
-  /*
-   * Preserve constant POS results as well.
-   */
   const posExpr =
     pos.implicants.length === 0
       ? String(pos.constant)
@@ -241,19 +496,7 @@ function App() {
       return evaluateSOP(chosen, a);
     }
 
-    if (chosen === '1') {
-      return 1;
-    }
-
-    if (chosen === '0') {
-      return 0;
-    }
-
-    /*
-     * POS is already parsed above in normal cases.
-     * This fallback only matters if parsing failed.
-     */
-    return 0;
+    return chosen === '1' ? 1 : 0;
   };
 
   const rows = Array.from(
@@ -284,28 +527,35 @@ function App() {
         s: simplified,
         nand: nandValue,
         nor: norValue,
+        dc: canonical.dc.includes(m),
       };
     }
   );
 
+  // Don't-care (X) rows are intentionally excluded from verification.
+  // A minimized circuit is allowed to produce either 0 or 1 on an X row.
+  const requiredRows = rows.filter(r => !r.dc);
+
   const score = {
-    simplified: rows.filter(
+    simplified: requiredRows.filter(
       r => r.o === r.s
     ).length,
 
-    nand: rows.filter(
+    nand: requiredRows.filter(
       r => r.o === r.nand
     ).length,
 
-    nor: rows.filter(
+    nor: requiredRows.filter(
       r => r.o === r.nor
     ).length,
   };
 
+  const requiredCount = requiredRows.length;
+
   const allPass =
-    score.simplified === rows.length &&
-    score.nand === rows.length &&
-    score.nor === rows.length;
+    score.simplified === requiredCount &&
+    score.nand === requiredCount &&
+    score.nor === requiredCount;
 
   const setTab = (
     i: number,
@@ -314,6 +564,19 @@ function App() {
     setTable(t =>
       t.map((x, j) =>
         j === i ? value : x
+      )
+    );
+  };
+
+  const setKMapCell = (
+    minterm: number,
+    value: TruthValue
+  ) => {
+    setKmapTable(previous =>
+      previous.map((cell, i) =>
+        i === minterm
+          ? value
+          : cell
       )
     );
   };
@@ -370,6 +633,9 @@ function App() {
                   setTable(
                     Array(2 ** k).fill(0)
                   );
+                  setKmapTable(
+                    Array(2 ** k).fill(0)
+                  );
                 }}
                 className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
               >
@@ -382,7 +648,7 @@ function App() {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 rounded-xl bg-slate-900/70 p-1">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 rounded-xl bg-slate-900/70 p-1">
             {(
               [
                 [
@@ -396,6 +662,10 @@ function App() {
                 [
                   'truth',
                   'Truth table',
+                ],
+                [
+                  'kmap',
+                  'K-map',
                 ],
               ] as const
             ).map(([id, label]) => (
@@ -590,6 +860,14 @@ function App() {
             </div>
           )}
 
+          {mode === 'kmap' && (
+            <KMapInput
+              n={n}
+              values={kmapTable}
+              onChange={setKMapCell}
+            />
+          )}
+
           <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
             <div className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5">
               Required 1s:{' '}
@@ -700,6 +978,7 @@ function App() {
           )}
         </section>
 
+
         {/* FULL TRUTH TABLE */}
         <section className="glass rounded-3xl p-5">
           <h2 className="text-lg font-bold">
@@ -744,11 +1023,24 @@ function App() {
                       )
                     )}
 
-                    <td>{r.o}</td>
+                    <td>
+                      {r.dc ? (
+                        <span className="text-violet-300 font-semibold">
+                          X
+                        </span>
+                      ) : (
+                        r.o
+                      )}
+                    </td>
+
                     <td>{r.s}</td>
 
                     <td>
-                      {r.o === r.s ? (
+                      {r.dc ? (
+                        <span className="text-violet-300 text-xs font-semibold">
+                          — don't-care
+                        </span>
+                      ) : r.o === r.s ? (
                         <CheckCircle2
                           size={15}
                           className="inline text-emerald-400"
@@ -766,7 +1058,7 @@ function App() {
           </div>
         </section>
 
-        {/* CIRCUITS */}
+        {/* 5 · CIRCUITS */}
         <section className="grid gap-5 lg:grid-cols-2">
           <div className="glass rounded-3xl p-4">
             <CircuitSvg
@@ -795,7 +1087,7 @@ function App() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold">
-                4 · Verification
+                6 · Verification
               </h2>
 
               <div className="mt-1 text-xs text-slate-500">
@@ -821,7 +1113,7 @@ function App() {
             {[
               [
                 'Original',
-                rows.length,
+                requiredCount,
               ],
               [
                 'Simplified',
@@ -845,7 +1137,7 @@ function App() {
                 </div>
 
                 <div className="mt-2 text-2xl font-black text-emerald-300">
-                  {count}/{rows.length}
+                  {count}/{requiredCount}
                 </div>
 
                 <div className="text-xs text-slate-500">
