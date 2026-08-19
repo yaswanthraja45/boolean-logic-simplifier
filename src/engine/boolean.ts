@@ -1413,52 +1413,55 @@ export function buildSOPGraph(
   /*
    * NOR-ONLY
    *
-   * NOR is naturally implemented
-   * from POS.
+   * For NOR-only circuits we use the minimized POS form.
    *
-   * For:
+   * A POS expression is:
    *
-   * F = S1 · S2
+   *   F = S1 · S2 · ... · Sk
    *
-   * First:
+   * Each sum clause is turned into its complement:
    *
-   * S1' = NOR(S1 literals)
-   * S2' = NOR(S2 literals)
+   *   S1' = NOR(literals of S1)
    *
-   * Then:
+   * and the final NOR performs:
    *
-   * F = NOR(S1', S2')
+   *   NOR(S1', S2', ...) = S1 · S2 · ...
+   *
+   * The `implicants` argument is therefore expected to be
+   * the POS implicants returned by minimizePOS().
+   *
+   * POS implicant encoding:
+   *
+   *   0 -> positive literal X
+   *   1 -> complemented literal X'
+   *   - -> literal omitted
+   *
+   * This is exactly the encoding produced by the
+   * implicantToPOS() representation and the Quine–McCluskey
+   * zero-cover used by minimizePOS().
    */
 
   const clauseNors: GateNode[] = [];
 
   implicants.forEach(
-    (imp, ti) => {
+    (imp, clauseIndex) => {
       const literals: GateNode[] = [];
 
       names(n).forEach(
         (_, i) => {
-          if (
-            imp.bits[i] === '-'
-          ) {
+          if (imp.bits[i] === '-') {
             return;
           }
 
-          let source =
+          const source =
             inputNodes[i];
 
           /*
-           * POS representation:
+           * A POS literal whose bit is 1 is complemented:
            *
-           * bit 0 -> variable
-           * bit 1 -> variable'
-           *
-           * Therefore bit 1 needs
-           * an inverter.
+           *   X' = NOR(X, X)
            */
-          if (
-            imp.bits[i] === '1'
-          ) {
+          if (imp.bits[i] === '1') {
             const inv = add(
               ng(
                 'NOR',
@@ -1479,47 +1482,77 @@ export function buildSOPGraph(
               }
             );
 
-            source = inv;
+            literals.push(inv);
+          } else {
+            /*
+             * bit 0 is the positive literal X.
+             */
+            literals.push(source);
           }
-
-          literals.push(source);
         }
       );
 
-      const clause = add(
+      /*
+       * NOR of all literals gives the complement of
+       * the complete POS clause.
+       *
+       * Example:
+       *
+       *   S = A + B'
+       *   S' = NOR(A, B')
+       */
+      const clauseComplement = add(
         ng(
           'NOR',
-          `S${ti + 1}`
+          `S${clauseIndex + 1}`
         )
       );
 
       literals.forEach(
-        (lit, j) =>
+        (literal, port) => {
           edges.push({
-            from: lit.id,
-            to: clause.id,
-            port: j,
-          })
+            from: literal.id,
+            to: clauseComplement.id,
+            port,
+          });
+        }
       );
 
       clauseNors.push(
-        clause
+        clauseComplement
       );
     }
   );
 
   let out: GateNode;
 
-  if (
-    clauseNors.length === 1
-  ) {
+  if (clauseNors.length === 0) {
     /*
-     * A single POS clause:
-     *
+     * This happens only for a constant function.
+     */
+    const c = add(
+      ng(
+        'INPUT',
+        String(constant)
+      )
+    );
+
+    return {
+      nodes,
+      edges,
+      output: c.id,
+      width: 520,
+      height: 260,
+    };
+  }
+
+  if (clauseNors.length === 1) {
+    /*
      * F = S1
      *
-     * First NOR gives S1'.
-     * NOR(S1',S1') gives S1.
+     * clauseNors[0] = S1'
+     *
+     * NOR(S1', S1') = S1
      */
     out = add(
       ng('NOR')
@@ -1527,30 +1560,38 @@ export function buildSOPGraph(
 
     edges.push(
       {
-        from:
-          clauseNors[0].id,
+        from: clauseNors[0].id,
         to: out.id,
         port: 0,
       },
       {
-        from:
-          clauseNors[0].id,
+        from: clauseNors[0].id,
         to: out.id,
         port: 1,
       }
     );
   } else {
+    /*
+     * F = S1 · S2 · ... · Sk
+     *
+     * NOR(S1', S2', ..., Sk')
+     *
+     * = (S1' + S2' + ... + Sk')'
+     *
+     * = S1 · S2 · ... · Sk
+     */
     out = add(
       ng('NOR')
     );
 
     clauseNors.forEach(
-      (c, j) =>
+      (clause, port) => {
         edges.push({
-          from: c.id,
+          from: clause.id,
           to: out.id,
-          port: j,
-        })
+          port,
+        });
+      }
     );
   }
 
@@ -1558,8 +1599,11 @@ export function buildSOPGraph(
     nodes,
     edges,
     output: out.id,
-    width: 900,
-    height: 420,
+    width: 1000,
+    height: Math.max(
+      360,
+      180 + implicants.length * 110
+    ),
   };
 }
 

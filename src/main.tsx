@@ -256,28 +256,35 @@ function App() {
         s: simplified,
         nand: nandValue,
         nor: norValue,
+        dc: canonical.dc.includes(m),
       };
     }
   );
 
+  // Don't-care (X) rows are intentionally excluded from verification.
+  // A minimized circuit is allowed to produce either 0 or 1 on an X row.
+  const requiredRows = rows.filter(r => !r.dc);
+
   const score = {
-    simplified: rows.filter(
+    simplified: requiredRows.filter(
       r => r.o === r.s
     ).length,
 
-    nand: rows.filter(
+    nand: requiredRows.filter(
       r => r.o === r.nand
     ).length,
 
-    nor: rows.filter(
+    nor: requiredRows.filter(
       r => r.o === r.nor
     ).length,
   };
 
+  const requiredCount = requiredRows.length;
+
   const allPass =
-    score.simplified === rows.length &&
-    score.nand === rows.length &&
-    score.nor === rows.length;
+    score.simplified === requiredCount &&
+    score.nand === requiredCount &&
+    score.nor === requiredCount;
 
   const setTab = (
     i: number,
@@ -716,11 +723,24 @@ function App() {
                       )
                     )}
 
-                    <td>{r.o}</td>
+                    <td>
+                      {r.dc ? (
+                        <span className="text-violet-300 font-semibold">
+                          X
+                        </span>
+                      ) : (
+                        r.o
+                      )}
+                    </td>
+
                     <td>{r.s}</td>
 
                     <td>
-                      {r.o === r.s ? (
+                      {r.dc ? (
+                        <span className="text-violet-300 text-xs font-semibold">
+                          — don't-care
+                        </span>
+                      ) : r.o === r.s ? (
                         <CheckCircle2
                           size={15}
                           className="inline text-emerald-400"
@@ -793,7 +813,7 @@ function App() {
             {[
               [
                 'Original',
-                rows.length,
+                requiredCount,
               ],
               [
                 'Simplified',
@@ -817,7 +837,7 @@ function App() {
                 </div>
 
                 <div className="mt-2 text-2xl font-black text-emerald-300">
-                  {count}/{rows.length}
+                  {count}/{requiredCount}
                 </div>
 
                 <div className="text-xs text-slate-500">
