@@ -125,15 +125,31 @@ function App() {
     n
   );
 
-  const sopExpr = expressionForSOP(
-    sop.implicants,
-    n
-  );
+  /*
+   * Preserve constant minimization results.
+   *
+   * expressionForSOP([]) would otherwise return "0",
+   * even when minimizeSOP() correctly determined that
+   * the function is the constant 1.
+   */
+  const sopExpr =
+    sop.implicants.length === 0
+      ? String(sop.constant)
+      : expressionForSOP(
+          sop.implicants,
+          n
+        );
 
-  const posExpr = expressionForPOS(
-    pos.implicants,
-    n
-  );
+  /*
+   * Preserve constant POS results as well.
+   */
+  const posExpr =
+    pos.implicants.length === 0
+      ? String(pos.constant)
+      : expressionForPOS(
+          pos.implicants,
+          n
+        );
 
   const [form, setForm] = useState<'SOP' | 'POS'>(
     'SOP'
@@ -225,7 +241,19 @@ function App() {
       return evaluateSOP(chosen, a);
     }
 
-    return chosen === '1' ? 1 : 0;
+    if (chosen === '1') {
+      return 1;
+    }
+
+    if (chosen === '0') {
+      return 0;
+    }
+
+    /*
+     * POS is already parsed above in normal cases.
+     * This fallback only matters if parsing failed.
+     */
+    return 0;
   };
 
   const rows = Array.from(
@@ -256,35 +284,28 @@ function App() {
         s: simplified,
         nand: nandValue,
         nor: norValue,
-        dc: canonical.dc.includes(m),
       };
     }
   );
 
-  // Don't-care (X) rows are intentionally excluded from verification.
-  // A minimized circuit is allowed to produce either 0 or 1 on an X row.
-  const requiredRows = rows.filter(r => !r.dc);
-
   const score = {
-    simplified: requiredRows.filter(
+    simplified: rows.filter(
       r => r.o === r.s
     ).length,
 
-    nand: requiredRows.filter(
+    nand: rows.filter(
       r => r.o === r.nand
     ).length,
 
-    nor: requiredRows.filter(
+    nor: rows.filter(
       r => r.o === r.nor
     ).length,
   };
 
-  const requiredCount = requiredRows.length;
-
   const allPass =
-    score.simplified === requiredCount &&
-    score.nand === requiredCount &&
-    score.nor === requiredCount;
+    score.simplified === rows.length &&
+    score.nand === rows.length &&
+    score.nor === rows.length;
 
   const setTab = (
     i: number,
@@ -723,24 +744,11 @@ function App() {
                       )
                     )}
 
-                    <td>
-                      {r.dc ? (
-                        <span className="text-violet-300 font-semibold">
-                          X
-                        </span>
-                      ) : (
-                        r.o
-                      )}
-                    </td>
-
+                    <td>{r.o}</td>
                     <td>{r.s}</td>
 
                     <td>
-                      {r.dc ? (
-                        <span className="text-violet-300 text-xs font-semibold">
-                          — don't-care
-                        </span>
-                      ) : r.o === r.s ? (
+                      {r.o === r.s ? (
                         <CheckCircle2
                           size={15}
                           className="inline text-emerald-400"
@@ -813,7 +821,7 @@ function App() {
             {[
               [
                 'Original',
-                requiredCount,
+                rows.length,
               ],
               [
                 'Simplified',
@@ -837,7 +845,7 @@ function App() {
                 </div>
 
                 <div className="mt-2 text-2xl font-black text-emerald-300">
-                  {count}/{requiredCount}
+                  {count}/{rows.length}
                 </div>
 
                 <div className="text-xs text-slate-500">
